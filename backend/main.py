@@ -20,46 +20,64 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize OpenAI client for Aliyun/DeepSeek
+# Initialize DashScope
 # Ensure DASHSCOPE_API_KEY is set in .env
 api_key = os.getenv("DASHSCOPE_API_KEY")
 if not api_key:
     print("Warning: DASHSCOPE_API_KEY not found in environment variables.")
 
-client = OpenAI(
-    api_key=api_key,
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-)
+# App ID from Aliyun Console
+APP_ID = os.getenv("APP_ID")
+if not APP_ID:
+    print("Warning: APP_ID not found in environment variables.")
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str | None = None
+    profile_context: str | None = None  # Profile info (name, stage, personality type)
 
-async def generate_stream(user_input: str):
-    messages = [
-        {"role": "system", "content": "You are a helpful AI dating coach. Format your responses beautifully using Markdown. Do NOT use # (H1). Can sometimes use ## (H2) for titles; use ### (H3) or bold text instead to keep headings compact."},
-        {"role": "user", "content": user_input}
-    ]
+async def generate_stream(user_input: str, session_id: str = None, profile_context: str = None):
     try:
-        completion = client.chat.completions.create(
-            model="deepseek-v3.2-exp", 
-            messages=messages,
+        from dashscope import Application
+        from http import HTTPStatus
+        
+        # Prepend profile context to the user input if provided
+        prompt = user_input
+        if profile_context:
+            prompt = f"{profile_context}\n\n{user_input}"
+        
+        responses = Application.call(
+            app_id=APP_ID,
+            prompt=prompt,
+            session_id=session_id,
+            api_key=api_key,
             stream=True,
-            stream_options={"include_usage": True},
+            incremental_output=True
         )
 
-        for chunk in completion:
-            delta = chunk.choices[0].delta if chunk.choices else None
-            
-            if delta:
-                # Check for actual answer content
-                if hasattr(delta, "content") and delta.content:
-                    yield json.dumps({"type": "answer", "content": delta.content}) + "\n"
+        for response in responses:
+            if response.status_code != HTTPStatus.OK:
+                error_msg = {"type": "error", "content": f"Error {response.code}: {response.message}"}
+                yield json.dumps(error_msg) + "\n"
+                continue
+
+            # Check if there is output text
+            if response.output and response.output.text:
+                yield json.dumps({
+                    "type": "answer", 
+                    "content": response.output.text,
+                    "session_id": response.output.session_id
+                }) + "\n"
+                
     except Exception as e:
         yield json.dumps({"type": "error", "content": str(e)}) + "\n"
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
-    return StreamingResponse(generate_stream(request.message), media_type="application/x-ndjson")
+    return StreamingResponse(
+        generate_stream(request.message, request.session_id, request.profile_context), 
+        media_type="application/x-ndjson"
+    )
 
 @app.get("/")
 async def root():

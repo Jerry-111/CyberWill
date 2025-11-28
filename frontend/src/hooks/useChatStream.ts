@@ -14,10 +14,11 @@ interface UseChatStreamReturn {
     stopGeneration: () => void;
 }
 
-export function useChatStream(): UseChatStreamReturn {
+export function useChatStream(profileContext?: string): UseChatStreamReturn {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [sessionId, setSessionId] = useState<string | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
 
     const stopGeneration = () => {
@@ -50,7 +51,11 @@ export function useChatStream(): UseChatStreamReturn {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ message: userMessage.content }),
+                body: JSON.stringify({
+                    message: userMessage.content,
+                    session_id: sessionId,
+                    profile_context: profileContext
+                }),
                 signal: abortControllerRef.current.signal,
             });
 
@@ -78,6 +83,10 @@ export function useChatStream(): UseChatStreamReturn {
                     if (!line.trim()) continue;
                     try {
                         const data = JSON.parse(line);
+
+                        if (data.session_id) {
+                            setSessionId(data.session_id);
+                        }
 
                         setMessages((prev) => {
                             const newMessages = [...prev];

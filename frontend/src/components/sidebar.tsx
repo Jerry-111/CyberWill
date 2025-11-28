@@ -1,12 +1,18 @@
-import Link from "next/link";
+"use client";
+
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, Users, MessageSquare, Map, Settings, LogOut, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProfile } from "@/context/profile-context";
 
-interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> { }
+interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
+    currentView: "selector" | "wizard" | "chat" | "analysis" | "advice";
+    onNavigate: (view: "selector" | "wizard" | "chat" | "analysis" | "advice") => void;
+}
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, currentView, onNavigate }: SidebarProps) {
+    const { currentProfile } = useProfile();
+
     return (
         <div className={cn("pb-12 w-full flex flex-col h-full", className)}>
             <div className="space-y-8 py-8 flex-1">
@@ -21,21 +27,67 @@ export function Sidebar({ className }: SidebarProps) {
 
                 <div className="px-4">
                     <div className="space-y-2">
-                        <Button variant="secondary" className="w-full justify-start h-12 px-5 font-medium rounded-2xl shadow-sm bg-white/60 text-pastel-purple hover:bg-white/80 hover:scale-[1.02] transition-all duration-300">
-                            <Bot className="mr-3 h-5 w-5" />
-                            赛博教练
-                        </Button>
-                        <Button variant="ghost" className="w-full justify-start h-12 px-5 rounded-2xl text-muted-foreground hover:text-pastel-pink hover:bg-white/30 transition-all duration-300">
+                        {/* 1. Girl Profile (First) */}
+                        <Button
+                            variant={currentView === "selector" || currentView === "wizard" ? "secondary" : "ghost"}
+                            onClick={() => onNavigate("selector")}
+                            className={cn(
+                                "w-full justify-start h-12 px-5 font-medium rounded-2xl transition-all duration-300",
+                                currentView === "selector" || currentView === "wizard"
+                                    ? "shadow-sm bg-white/60 text-pastel-pink hover:bg-white/80 hover:scale-[1.02]"
+                                    : "text-muted-foreground hover:text-pastel-pink hover:bg-white/30"
+                            )}
+                        >
                             <Users className="mr-3 h-5 w-5" />
                             女生档案
                         </Button>
-                        <Button variant="ghost" className="w-full justify-start h-12 px-5 rounded-2xl text-muted-foreground hover:text-pastel-blue hover:bg-white/30 transition-all duration-300">
+
+                        {/* 2. Cyber Advisor */}
+                        <Button
+                            variant={currentView === "chat" ? "secondary" : "ghost"}
+                            onClick={() => onNavigate("chat")}
+                            className={cn(
+                                "w-full justify-start h-12 px-5 font-medium rounded-2xl transition-all duration-300",
+                                currentView === "chat"
+                                    ? "shadow-sm bg-white/60 text-pastel-purple hover:bg-white/80 hover:scale-[1.02]"
+                                    : "text-muted-foreground hover:text-pastel-purple hover:bg-white/30",
+                                !currentProfile && "opacity-70" // Visual hint but clickable
+                            )}
+                        >
+                            <Bot className="mr-3 h-5 w-5" />
+                            赛博军师
+                        </Button>
+
+                        {/* 3. Chat Analysis (Restored) */}
+                        <Button
+                            variant={currentView === "analysis" ? "secondary" : "ghost"}
+                            onClick={() => onNavigate("analysis")}
+                            className={cn(
+                                "w-full justify-start h-12 px-5 font-medium rounded-2xl transition-all duration-300",
+                                currentView === "analysis"
+                                    ? "shadow-sm bg-white/60 text-pastel-blue hover:bg-white/80 hover:scale-[1.02]"
+                                    : "text-muted-foreground hover:text-pastel-blue hover:bg-white/30",
+                                !currentProfile && "opacity-70"
+                            )}
+                        >
                             <MessageSquare className="mr-3 h-5 w-5" />
                             聊天分析
                         </Button>
-                        <Button variant="ghost" className="w-full justify-start h-12 px-5 rounded-2xl text-muted-foreground hover:text-pastel-light-pink hover:bg-white/30 transition-all duration-300">
+
+                        {/* 4. Chat Advice */}
+                        <Button
+                            variant={currentView === "advice" ? "secondary" : "ghost"}
+                            onClick={() => onNavigate("advice")}
+                            className={cn(
+                                "w-full justify-start h-12 px-5 font-medium rounded-2xl transition-all duration-300",
+                                currentView === "advice"
+                                    ? "shadow-sm bg-white/60 text-pastel-light-pink hover:bg-white/80 hover:scale-[1.02]"
+                                    : "text-muted-foreground hover:text-pastel-light-pink hover:bg-white/30",
+                                !currentProfile && "opacity-70"
+                            )}
+                        >
                             <Map className="mr-3 h-5 w-5" />
-                            僚机计划
+                            聊天建议
                         </Button>
                     </div>
                 </div>

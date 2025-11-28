@@ -4,24 +4,59 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Send, Bot, User, Sparkles, MoreHorizontal, Square } from "lucide-react";
+import { Send, Bot, User, Sparkles, MoreHorizontal, Square, ChevronDown, Plus, Settings } from "lucide-react";
 import { useChatStream } from "@/hooks/useChatStream";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { motion, AnimatePresence } from "framer-motion";
+import { useProfile } from "@/context/profile-context";
 
-export function ChatInterface() {
-    const { messages, input, setInput, isLoading, sendMessage, stopGeneration } = useChatStream();
+interface ChatInterfaceProps {
+    onManageProfiles?: () => void;
+}
+
+export function ChatInterface({ onManageProfiles }: ChatInterfaceProps) {
+    const { currentProfile, profiles, selectProfile, clearCurrentProfile } = useProfile();
+    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+    // Create profile context string for the AI
+    const profileContext = currentProfile
+        ? `[当前聊天对象档案]
+姓名: ${currentProfile.name}
+关系阶段: ${currentProfile.stage}
+${currentProfile.personalityType ? `人格类型: ${currentProfile.personalityType}` : ''}
+
+请根据这个档案信息来提供建议和分析。`
+        : undefined;
+
+    const { messages, input, setInput, isLoading, sendMessage, stopGeneration } = useChatStream(profileContext);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [displayedContent, setDisplayedContent] = useState("");
     const [isTyping, setIsTyping] = useState(false);
 
+    // Close menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (!target.closest('#profile-menu-container')) {
+                setIsProfileMenuOpen(false);
+            }
+        };
+
+        if (isProfileMenuOpen) {
+            document.addEventListener('click', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('click', handleClickOutside);
+        };
+    }, [isProfileMenuOpen]);
+
     // Auto-scroll to bottom
     useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        if (scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
         }
     }, [messages, displayedContent]);
 
@@ -32,6 +67,12 @@ export function ChatInterface() {
             setIsTyping(true);
             let currentText = displayedContent;
             const targetText = lastMessage.content;
+
+            // Reset if we started a new message (target is shorter than what we're displaying)
+            if (targetText.length < currentText.length) {
+                setDisplayedContent(targetText);
+                currentText = targetText;
+            }
 
             if (targetText.length > currentText.length) {
                 const distance = targetText.length - currentText.length;
@@ -99,7 +140,7 @@ export function ChatInterface() {
     return (
         <div className="flex flex-col h-full relative">
             {/* Header */}
-            <div className="px-8 py-6 flex items-center justify-between border-b border-black/5">
+            <div className="px-8 py-6 flex items-center justify-between border-b border-black/5 relative z-20">
                 <div className="flex items-center gap-4">
                     <div className="relative">
                         <Avatar className="h-12 w-12 border-2 border-white shadow-sm">
@@ -109,16 +150,106 @@ export function ChatInterface() {
                         <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-400 border-2 border-white"></span>
                     </div>
                     <div>
-                        <h1 className="font-bold text-lg tracking-tight text-foreground">赛博教练</h1>
+                        <h1 className="font-bold text-lg tracking-tight text-foreground">赛博军师</h1>
                         <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-pastel-blue animate-pulse"></span>
                             DeepSeek V3 • Always Online
                         </p>
                     </div>
                 </div>
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground hover:bg-black/5 rounded-full">
-                    <MoreHorizontal className="h-5 w-5" />
-                </Button>
+
+                {/* Profile Switcher */}
+                <div className="relative" id="profile-menu-container">
+                    <Button
+                        variant="ghost"
+                        className={cn(
+                            "flex items-center gap-3 pl-2 pr-4 py-2 h-auto rounded-full border transition-all duration-300",
+                            isProfileMenuOpen
+                                ? "bg-black/5 border-black/10"
+                                : "bg-white/50 border-black/5 hover:bg-white/80 hover:border-black/10"
+                        )}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsProfileMenuOpen(!isProfileMenuOpen);
+                        }}
+                    >
+                        <div className={cn(
+                            "h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm",
+                            currentProfile?.avatarColor || "bg-gradient-to-br from-pastel-pink to-pastel-purple"
+                        )}>
+                            {currentProfile?.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="text-left hidden sm:block">
+                            <p className="text-sm font-bold text-foreground leading-none">{currentProfile?.name}</p>
+                            <p className="text-[10px] text-muted-foreground font-medium mt-0.5">{currentProfile?.stage}</p>
+                        </div>
+                        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-300", isProfileMenuOpen && "rotate-180")} />
+                    </Button>
+
+                    <AnimatePresence>
+                        {isProfileMenuOpen && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                transition={{ duration: 0.2 }}
+                                className="absolute right-0 top-full mt-2 w-64 bg-white/90 backdrop-blur-xl border border-white/50 rounded-2xl shadow-xl overflow-hidden p-2"
+                            >
+                                <div className="max-h-[300px] overflow-y-auto space-y-1">
+                                    <p className="px-3 py-2 text-xs font-medium text-muted-foreground">切换档案</p>
+                                    {profiles.map(profile => (
+                                        <button
+                                            key={profile.id}
+                                            onClick={() => {
+                                                selectProfile(profile.id);
+                                                setIsProfileMenuOpen(false);
+                                            }}
+                                            className={cn(
+                                                "w-full flex items-center gap-3 p-2 rounded-xl transition-colors",
+                                                currentProfile?.id === profile.id
+                                                    ? "bg-pastel-purple/10"
+                                                    : "hover:bg-black/5"
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                "h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0",
+                                                profile.avatarColor || "bg-gradient-to-br from-pastel-pink to-pastel-purple"
+                                            )}>
+                                                {profile.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="text-left overflow-hidden">
+                                                <p className={cn("text-sm font-bold truncate", currentProfile?.id === profile.id ? "text-pastel-purple" : "text-foreground")}>
+                                                    {profile.name}
+                                                </p>
+                                                <p className="text-[10px] text-muted-foreground truncate">{profile.stage}</p>
+                                            </div>
+                                            {currentProfile?.id === profile.id && (
+                                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-pastel-purple" />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="h-px bg-black/5 my-2" />
+                                <button
+                                    onClick={() => {
+                                        if (onManageProfiles) {
+                                            onManageProfiles();
+                                        } else {
+                                            clearCurrentProfile();
+                                        }
+                                        setIsProfileMenuOpen(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-black/5 transition-colors text-muted-foreground hover:text-foreground"
+                                >
+                                    <div className="h-8 w-8 rounded-full bg-black/5 flex items-center justify-center shrink-0">
+                                        <Settings className="h-4 w-4" />
+                                    </div>
+                                    <span className="text-sm font-medium">管理档案 / 新建</span>
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             </div>
 
             {/* Messages Area */}
@@ -131,21 +262,50 @@ export function ChatInterface() {
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
                                 transition={{ duration: 0.5, ease: "easeOut" }}
-                                className="flex flex-col items-center justify-center h-[50vh] text-center space-y-8"
+                                className="flex flex-col items-center justify-center h-[50vh] text-center space-y-8 relative z-10"
                             >
-                                <div className="h-24 w-24 rounded-[2rem] bg-white/50 flex items-center justify-center shadow-xl shadow-pastel-purple/10 backdrop-blur-sm">
-                                    <Sparkles className="h-10 w-10 text-pastel-purple" />
+                                {/* Central Profile Switcher */}
+                                <div className="relative group">
+                                    <motion.button
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                                        className="relative z-10"
+                                    >
+                                        <div className={cn(
+                                            "h-28 w-28 rounded-[2.5rem] flex items-center justify-center shadow-2xl transition-all duration-300",
+                                            currentProfile?.avatarColor || "bg-gradient-to-br from-pastel-pink to-pastel-purple",
+                                            "shadow-pastel-purple/20"
+                                        )}>
+                                            <span className="text-5xl font-bold text-white">
+                                                {currentProfile?.name.charAt(0).toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <div className="absolute -bottom-3 -right-3 bg-white rounded-full p-2.5 shadow-lg border border-black/5 text-muted-foreground group-hover:text-pastel-purple transition-colors">
+                                            <Settings className="h-5 w-5" />
+                                        </div>
+                                    </motion.button>
+
+                                    {/* Profile Info */}
+                                    <div className="mt-6 space-y-2">
+                                        <h2 className="text-3xl font-bold tracking-tight text-foreground">
+                                            与 {currentProfile?.name} 聊天中
+                                        </h2>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span className="px-3 py-1 rounded-full bg-black/5 text-sm font-medium text-muted-foreground">
+                                                {currentProfile?.stage}
+                                            </span>
+                                            {currentProfile?.personalityType && (
+                                                <span className="px-3 py-1 rounded-full bg-pastel-purple/10 text-sm font-medium text-pastel-purple">
+                                                    {currentProfile?.personalityType}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <h2 className="text-3xl font-bold tracking-tight text-foreground">
-                                        Welcome Back
-                                    </h2>
-                                    <p className="text-muted-foreground max-w-md mx-auto text-lg">
-                                        Ready to level up your dating game?
-                                    </p>
-                                </div>
+
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md mt-4">
-                                    {["Analyze screenshot", "Date ideas", "Reply help", "Profile review"].map((suggestion) => (
+                                    {["分析聊天截图", "约会主意", "回复助手", "朋友圈评价"].map((suggestion) => (
                                         <Button
                                             key={suggestion}
                                             variant="outline"
@@ -173,8 +333,7 @@ export function ChatInterface() {
                                 )}
                             >
                                 <Avatar className={cn(
-                                    "h-8 w-8 mt-1 shadow-sm transition-opacity duration-300",
-                                    msg.role === "user" ? "opacity-0 group-hover:opacity-100" : "opacity-100"
+                                    "h-8 w-8 mt-1 shadow-sm transition-opacity duration-300"
                                 )}>
                                     <AvatarFallback className={cn(
                                         "text-xs font-bold",
@@ -189,7 +348,7 @@ export function ChatInterface() {
                                         className={cn(
                                             "rounded-2xl px-6 py-3.5 text-[15px] shadow-sm leading-relaxed transition-all duration-300",
                                             msg.role === "user"
-                                                ? "bg-gradient-to-br from-pastel-purple to-pastel-blue text-white rounded-tr-sm shadow-md shadow-pastel-blue/20 user-bubble"
+                                                ? "bg-pastel-purple/60 text-white rounded-tr-sm shadow-sm user-bubble"
                                                 : "bg-white/80 border border-white/50 text-foreground rounded-tl-sm backdrop-blur-sm"
                                         )}
                                     >
@@ -256,7 +415,7 @@ export function ChatInterface() {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            placeholder="Message Cyber Coach..."
+                            placeholder="给赛博军师发送消息..."
                             className="flex-1 bg-transparent border-none focus-visible:ring-0 px-6 py-3 h-auto text-base placeholder:text-muted-foreground/50 text-foreground"
                             disabled={isLoading}
                         />
