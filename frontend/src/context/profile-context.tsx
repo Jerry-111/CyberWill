@@ -15,7 +15,13 @@ export interface GirlProfile {
     name: string; // Can be a nickname or "Girl #1"
     stage: RelationshipStage;
     description: string; // AI generated summary
-    personalityType?: string; // AI analyzed personality type (e.g., "测试型", "理智型")
+    personalityType?: string; // Legacy field, kept for compatibility
+    traits?: {
+        investment: "测试" | "投资";
+        rationality: "感性" | "理性";
+        conflict: "回避" | "合理解释";
+    };
+    archetype?: string; // e.g. "邻家女孩", "高冷御姐"
     createdAt: number;
     avatarColor?: string; // For UI visualization
 }

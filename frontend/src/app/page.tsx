@@ -45,11 +45,11 @@ function AppContent() {
   };
 
   return (
-    <div className="h-screen w-full flex items-center justify-center p-4 sm:p-6 md:p-8 overflow-hidden">
-      <div className="w-full max-w-[1400px] h-full max-h-[900px] flex gap-6 relative z-10">
+    <div className="h-screen w-full flex items-center justify-center p-4 md:p-[2vw] overflow-hidden">
+      <div className="w-full h-full flex gap-6 relative z-10">
 
         {/* Left Card: Sidebar */}
-        <div className="hidden md:block w-[280px] h-full glass-panel rounded-[2rem] overflow-hidden">
+        <div className="hidden md:block w-[280px] lg:w-[320px] xl:w-[360px] 2xl:w-[400px] h-full glass-panel rounded-[2rem] overflow-hidden transition-all duration-300">
           <Sidebar
             currentView={view}
             onNavigate={handleNavigate}

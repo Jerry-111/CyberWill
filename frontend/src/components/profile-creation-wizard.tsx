@@ -19,7 +19,7 @@ const STAGES: { id: RelationshipStage; label: string; icon: any; color: string; 
     { id: "Stranger", label: "陌生人", icon: User, color: "bg-gray-100 text-gray-600", desc: "刚认识或还没见过面" },
     { id: "Acquaintance", label: "点头之交", icon: Coffee, color: "bg-orange-100 text-orange-600", desc: "偶尔聊几句" },
     { id: "Friend", label: "普通朋友", icon: User, color: "bg-blue-100 text-blue-600", desc: "纯友谊" },
-    { id: "Close Friend", label: "好朋友", icon: User, color: "bg-indigo-100 text-indigo-600", desc: "关系很铁" },
+    { id: "Close Friend", label: "好朋友", icon: User, color: "bg-indigo-100 text-indigo-600", desc: "关系很好" },
     { id: "Situationship", label: "暧昧中", icon: Wine, color: "bg-purple-100 text-purple-600", desc: "友达以上，恋人未满" },
     { id: "Girlfriend", label: "女朋友", icon: Heart, color: "bg-red-100 text-red-600", desc: "正式交往" },
 ];
@@ -146,6 +146,25 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
 5. 问题要像知识库中一样，具体而且帮助用户容易回答
 6. 1-2问题判断测试/投资型，1-2问题判断理性/感性型，1-2问题判断合理解释/回避型
 
+在收集完足够信息后（至少3轮对话），请给出详细分析，并必须包含以下结论：
+1. 人格特质判定（必须从每组中选一个, 包含每个维度）：
+   - 维度一：测试型 OR 投资型
+   - 维度二：感性型 OR 理性型
+   - 维度三：回避型 OR 合理解释型
+2. 综合类型命名：根据以上三个维度的组合（共8种可能组合），判定她属于以下8种特定人格原型之一：
+   - 冰美人
+   - 勾引家
+   - 花蝴蝶
+   - 灰姑娘
+   - 鉴赏家
+   - 邻家女孩
+   - 女教父
+   - 现代女人
+
+请在回答的最后，严格按照以下格式输出总结（用于系统识别）：
+[[TRAITS:维度一,维度二,维度三]]
+[[ARCHETYPE:类型名称]]
+
 现在开始第一个问题。`;
 
             sendMessage(initialPrompt, true);
@@ -167,15 +186,34 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
         const lastAssistantMessage = messages.filter(m => m.role === "assistant").pop();
         const fullAnalysis = lastAssistantMessage?.content || "暂无描述。";
 
-        // Extract personality type from the analysis
-        // Look for common patterns like "测试型", "投资型", "理智型", "感性型" etc.
-        const personalityType = fullAnalysis.match(/(测试|投资|理智|感性|合理解释|回避)型/g)?.join('、') || "";
+        // Extract personality traits and archetype
+        const traitsMatch = fullAnalysis.match(/\[\[TRAITS:(.*?)\]\]/);
+        const archetypeMatch = fullAnalysis.match(/\[\[ARCHETYPE:(.*?)\]\]/);
+
+        let traits = undefined;
+        if (traitsMatch) {
+            const traitsList = traitsMatch[1].split(/[,，、]/).map(t => t.trim());
+            traits = {
+                investment: (traitsList.find(t => t.includes("测试") || t.includes("投资"))?.includes("测试") ? "测试" : "投资") as "测试" | "投资",
+                rationality: (traitsList.find(t => t.includes("感性") || t.includes("理性"))?.includes("感性") ? "感性" : "理性") as "感性" | "理性",
+                conflict: (traitsList.find(t => t.includes("回避") || t.includes("合理"))?.includes("回避") ? "回避" : "合理解释") as "回避" | "合理解释"
+            };
+        }
+
+        const archetype = archetypeMatch ? archetypeMatch[1] : undefined;
+
+        // Clean up the description to remove the system tags
+        const cleanDescription = fullAnalysis
+            .replace(/\[\[TRAITS:.*?\]\]/, "")
+            .replace(/\[\[ARCHETYPE:.*?\]\]/, "")
+            .trim();
 
         addProfile({
             name: name,
             stage: selectedStage,
-            description: fullAnalysis.slice(0, 150) + (fullAnalysis.length > 150 ? "..." : ""),
-            personalityType: personalityType,
+            description: cleanDescription.slice(0, 150) + (cleanDescription.length > 150 ? "..." : ""),
+            traits: traits,
+            archetype: archetype,
             avatarColor: STAGES.find(s => s.id === selectedStage)?.color.split(" ")[0] || "bg-gray-100"
         });
 
