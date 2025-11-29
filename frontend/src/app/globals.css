@@ -170,23 +170,23 @@
 
     /* Light Mode Base */
     --background: #FFFFFF;
-    --foreground: #2E294E;
+    --foreground: #1A162E; /* Darker Deep Violet for better contrast */
     /* Deep Violet Text for softer contrast */
 
     --card: #FFFFFF;
-    --card-foreground: #2E294E;
+    --card-foreground: #1A162E;
 
     --popover: #FFFFFF;
-    --popover-foreground: #2E294E;
+    --popover-foreground: #1A162E;
 
     --primary: #B7A8D6;
     --primary-foreground: #FFFFFF;
 
     --secondary: #F4F4F5;
-    --secondary-foreground: #2E294E;
+    --secondary-foreground: #1A162E;
 
     --muted: #F4F4F5;
-    --muted-foreground: #868395;
+    --muted-foreground: #5F5C6B; /* Darker muted text */
 
     --accent: #FCD1DB;
     --accent-foreground: #2E294E;

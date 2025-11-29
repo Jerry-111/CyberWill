@@ -26,9 +26,7 @@ export function ProfileSelector({ onCreateStart, onProfileSelected, onViewAnalys
     const { profiles, selectProfile, deleteProfile } = useProfile();
 
     return (
-        <div className="flex flex-col items-center justify-center h-full w-full p-8 relative overflow-hidden">
-            {/* Background Elements - Subtle and Clean */}
-            <div className="absolute inset-0 bg-gradient-to-br from-white via-white to-pastel-purple/5 pointer-events-none" />
+        <div className="flex flex-col items-center justify-center h-full w-full p-8 relative overflow-hidden bg-white/50 backdrop-blur-xl">
 
             <div className="relative z-10 max-w-4xl w-full space-y-12">
                 <div className="text-center space-y-4">
@@ -139,7 +137,7 @@ export function ProfileSelector({ onCreateStart, onProfileSelected, onViewAnalys
                                             {[
                                                 { label: "投入度", value: profile.traits.investment, color: "text-pastel-purple" },
                                                 { label: "决策点", value: profile.traits.rationality, color: "text-pastel-pink" },
-                                                { label: "边界感", value: profile.traits.conflict, color: "text-pastel-blue" }
+                                                { label: "开放度", value: profile.traits.openness, color: "text-pastel-blue" }
                                             ].map((trait, i) => (
                                                 <div key={i} className="bg-white/80 rounded-2xl p-3 border border-white/50 shadow-sm flex flex-col items-center justify-center gap-1 transition-transform duration-300 hover:scale-105">
                                                     <span className="text-[10px] font-medium text-muted-foreground/80">{trait.label}</span>

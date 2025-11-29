@@ -4,104 +4,88 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Send, Bot, User, Sparkles, MoreHorizontal, Square, ChevronDown, Plus, Settings } from "lucide-react";
+import { Send, Bot, User, Sparkles, MoreHorizontal, Square, ChevronDown, Plus, Settings, MessageSquare, Trash2, Loader2, Heart, Zap, Brain, Search, Compass, Target } from "lucide-react";
 import { useChatStream } from "@/hooks/useChatStream";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { motion, AnimatePresence } from "framer-motion";
-import { useProfile } from "@/context/profile-context";
+import { useProfile, Message } from "@/context/profile-context";
 
 interface ChatInterfaceProps {
     onManageProfiles?: () => void;
 }
 
 export function ChatInterface({ onManageProfiles }: ChatInterfaceProps) {
-    const { currentProfile, profiles, selectProfile, clearCurrentProfile } = useProfile();
+    const { currentProfile, profiles, selectProfile, clearCurrentProfile, getHistory, addMessage } = useProfile();
+    const [input, setInput] = useState("");
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
-    // Create profile context string for the AI
-    const profileContext = currentProfile
-        ? `[当前聊天对象档案]
-姓名: ${currentProfile.name}
-关系阶段: ${currentProfile.stage}
-人格原型: ${currentProfile.archetype || currentProfile.personalityType || "未知"}
-核心特质:
-- 投入度: ${currentProfile.traits?.investment || "未知"}
-- 决策模式: ${currentProfile.traits?.rationality || "未知"}
-- 冲突应对: ${currentProfile.traits?.conflict || "未知"}
+    // Get messages for current profile
+    const messages = currentProfile ? getHistory(currentProfile.id) : [];
 
-请根据这个档案信息（特别是人格原型和核心特质）来提供建议和分析。`
-        : undefined;
-
-    const { messages, input, setInput, isLoading, sendMessage, stopGeneration } = useChatStream(profileContext);
+    const { isLoading, sendMessage, stopGeneration } = useChatStream({
+        onChunk: (chunk) => setDisplayedContent((prev) => prev + chunk),
+        onFinish: (fullMessage) => {
+            if (currentProfile) {
+                const aiMsg: Message = {
+                    id: crypto.randomUUID(),
+                    role: "assistant",
+                    content: fullMessage,
+                    createdAt: Date.now(),
+                };
+                addMessage(currentProfile.id, aiMsg);
+                setDisplayedContent("");
+            }
+        },
+    });
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [displayedContent, setDisplayedContent] = useState("");
-    const [isTyping, setIsTyping] = useState(false);
-
-    // Close menu when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            const target = event.target as HTMLElement;
-            if (!target.closest('#profile-menu-container')) {
-                setIsProfileMenuOpen(false);
-            }
-        };
-
-        if (isProfileMenuOpen) {
-            document.addEventListener('click', handleClickOutside);
-        }
-        return () => {
-            document.removeEventListener('click', handleClickOutside);
-        };
-    }, [isProfileMenuOpen]);
 
     // Auto-scroll to bottom
     useEffect(() => {
         if (scrollAreaRef.current) {
             scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
         }
-    }, [messages, displayedContent]);
+    }, [messages, displayedContent, isLoading]);
 
-    // Smooth Typing Logic
-    useEffect(() => {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage?.role === "assistant" && isLoading) {
-            setIsTyping(true);
-            let currentText = displayedContent;
-            const targetText = lastMessage.content;
+    const handleSendMessage = async () => {
+        if (!input.trim() || isLoading || !currentProfile) return;
 
-            // Reset if we started a new message (target is shorter than what we're displaying)
-            if (targetText.length < currentText.length) {
-                setDisplayedContent(targetText);
-                currentText = targetText;
-            }
+        const userMsg: Message = {
+            id: crypto.randomUUID(),
+            role: "user",
+            content: input.trim(),
+            createdAt: Date.now(),
+        };
 
-            if (targetText.length > currentText.length) {
-                const distance = targetText.length - currentText.length;
-                // Adaptive speed: faster if we are far behind to prevent broken markdown
-                const delay = distance > 10 ? 2 : 8;
+        // Add user message to context immediately
+        addMessage(currentProfile.id, userMsg);
+        const currentInput = input;
+        setInput("");
+        setDisplayedContent("");
 
-                const timeoutId = setTimeout(() => {
-                    setDisplayedContent(targetText.slice(0, currentText.length + 1));
-                }, delay);
-                return () => clearTimeout(timeoutId);
-            }
-        } else if (lastMessage?.role === "assistant" && !isLoading) {
-            // Ensure full content is displayed when loading stops
-            setDisplayedContent(lastMessage.content);
-            setIsTyping(false);
-        } else {
-            setDisplayedContent("");
-            setIsTyping(false);
-        }
-    }, [messages, isLoading, displayedContent]);
+        // Construct full profile context
+        const profileContext = `
+姓名: ${currentProfile.name}
+关系阶段: ${currentProfile.stage}
+人格原型: ${currentProfile.archetype || "未知"}
+核心特质:
+- 投入度: ${currentProfile.traits?.investment || "未知"}
+- 决策模式: ${currentProfile.traits?.rationality || "未知"}
+- 开放度: ${currentProfile.traits?.openness || "未知"}
+
+请根据这个档案信息（特别是人格原型和核心特质）来提供建议和分析。
+`;
+        // Note: History is handled by the backend session_id
+        await sendMessage(currentInput, profileContext);
+    };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            sendMessage();
+            handleSendMessage();
         }
     };
 
@@ -260,152 +244,133 @@ export function ChatInterface({ onManageProfiles }: ChatInterfaceProps) {
             <div className="flex-1 overflow-y-auto px-4" ref={scrollAreaRef}>
                 <div className="space-y-8 max-w-3xl mx-auto py-8 px-4">
                     <AnimatePresence mode="wait">
-                        {messages.length === 0 && (
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                transition={{ duration: 0.5, ease: "easeOut" }}
-                                className="flex flex-col items-center justify-center h-[50vh] text-center space-y-8 relative z-10"
-                            >
-                                {/* Central Profile Switcher */}
-                                <div className="relative group">
-                                    <motion.button
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                        onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                                        className="relative z-10"
-                                    >
-                                        <div className={cn(
-                                            "h-28 w-28 rounded-[2.5rem] flex items-center justify-center shadow-2xl transition-all duration-300",
-                                            currentProfile?.avatarColor || "bg-gradient-to-br from-pastel-pink to-pastel-purple",
-                                            "shadow-pastel-purple/20"
-                                        )}>
-                                            <span className="text-5xl font-bold text-white">
-                                                {currentProfile?.name.charAt(0).toUpperCase()}
-                                            </span>
-                                        </div>
-                                        <div className="absolute -bottom-3 -right-3 bg-white rounded-full p-2.5 shadow-lg border border-black/5 text-muted-foreground group-hover:text-pastel-purple transition-colors">
-                                            <Settings className="h-5 w-5" />
-                                        </div>
-                                    </motion.button>
-
-                                    {/* Profile Info */}
-                                    <div className="mt-6 space-y-2">
-                                        <h2 className="text-3xl font-bold tracking-tight text-foreground">
-                                            与 {currentProfile?.name} 聊天中
-                                        </h2>
-                                        <div className="flex items-center justify-center gap-2">
-                                            <span className="px-3 py-1 rounded-full bg-black/5 text-sm font-medium text-muted-foreground">
-                                                {currentProfile?.stage}
-                                            </span>
-                                            {currentProfile?.personalityType && (
-                                                <span className="px-3 py-1 rounded-full bg-pastel-purple/10 text-sm font-medium text-pastel-purple">
-                                                    {currentProfile?.personalityType}
-                                                </span>
-                                            )}
-                                        </div>
+                        {messages.length === 0 && !isLoading ? (
+                            <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto w-full space-y-10 py-12">
+                                <motion.div
+                                    initial={{ scale: 0.9, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ duration: 0.5 }}
+                                    className="relative"
+                                >
+                                    <div className="h-32 w-32 rounded-full bg-gradient-to-br from-pastel-purple/20 to-pastel-blue/20 flex items-center justify-center border-4 border-white shadow-xl relative z-10">
+                                        <Bot className="h-16 w-16 text-pastel-purple" />
                                     </div>
+                                    <div className="absolute inset-0 bg-pastel-purple/20 blur-3xl rounded-full -z-10 transform scale-150" />
+                                    <motion.div
+                                        animate={{ rotate: 360 }}
+                                        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                                        className="absolute -inset-4 border border-dashed border-pastel-purple/30 rounded-full z-0"
+                                    />
+                                </motion.div>
+
+                                <div className="text-center space-y-3">
+                                    <h2 className="text-2xl font-bold text-foreground">
+                                        准备好更懂 {currentProfile?.name} 了吗？
+                                    </h2>
+                                    <p className="text-muted-foreground max-w-md mx-auto">
+                                        我是你的赛博军师。解读心思、复盘相处、规划行动，为你出谋划策。
+                                    </p>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md mt-4">
-                                    {["分析聊天截图", "约会主意", "回复助手", "朋友圈评价"].map((suggestion) => (
-                                        <Button
-                                            key={suggestion}
-                                            variant="outline"
-                                            className="h-auto py-3.5 px-6 justify-center text-muted-foreground hover:text-pastel-purple hover:border-pastel-purple/30 hover:bg-white/60 transition-all duration-300 rounded-xl border-black/5 bg-white/30 shadow-sm"
-                                            onClick={() => setInput(suggestion)}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
+                                    {[
+                                        { icon: Brain, label: "解读心思", desc: "分析言行背后的真实含义", prompt: "帮我分析一下她这句话是什么意思：" },
+                                        { icon: Search, label: "关系复盘", desc: "诊断相处中的问题与隐患", prompt: "我想复盘一下我们最近的关系，情况是这样的：" },
+                                        { icon: Compass, label: "行动指南", desc: "当前阶段的具体行动建议", prompt: "我现在应该怎么做比较好？目前的情况是：" },
+                                        { icon: Target, label: "长期规划", desc: "制定关系推进的整体策略", prompt: "我想和她长期发展，请帮我规划一下：" }
+                                    ].map((item, i) => (
+                                        <motion.button
+                                            key={i}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: i * 0.1 + 0.3 }}
+                                            onClick={() => setInput(item.prompt)}
+                                            className="flex items-start gap-4 p-4 rounded-2xl bg-white/60 hover:bg-white/90 border border-white/50 hover:border-pastel-purple/30 shadow-sm hover:shadow-md transition-all text-left group"
                                         >
-                                            {suggestion}
-                                        </Button>
+                                            <div className="p-2.5 rounded-xl bg-pastel-purple/10 text-pastel-purple group-hover:bg-pastel-purple group-hover:text-white transition-colors">
+                                                <item.icon className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-sm text-foreground group-hover:text-pastel-purple transition-colors">{item.label}</div>
+                                                <div className="text-xs text-muted-foreground mt-0.5">{item.desc}</div>
+                                            </div>
+                                        </motion.button>
                                     ))}
                                 </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    <AnimatePresence initial={false}>
-                        {messages.map((msg, index) => (
-                            <motion.div
-                                key={index}
-                                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                transition={{ duration: 0.4, ease: "easeOut" }}
-                                className={cn(
-                                    "flex gap-4 group",
-                                    msg.role === "user" ? "flex-row-reverse" : "flex-row"
-                                )}
-                            >
-                                <Avatar className={cn(
-                                    "h-8 w-8 mt-1 shadow-sm transition-opacity duration-300"
-                                )}>
-                                    <AvatarFallback className={cn(
-                                        "text-xs font-bold",
-                                        msg.role === "user" ? "bg-pastel-blue text-white" : "bg-white text-pastel-purple border border-black/5"
-                                    )}>
-                                        {msg.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                                    </AvatarFallback>
-                                </Avatar>
-
-                                <div className={cn("flex flex-col gap-1 max-w-[85%]", msg.role === "user" ? "items-end" : "items-start")}>
-                                    <div
+                            </div>
+                        ) : (
+                            <>
+                                {messages.map((msg, index) => (
+                                    <motion.div
+                                        key={msg.id}
                                         className={cn(
-                                            "rounded-2xl px-6 py-3.5 text-[15px] shadow-sm leading-relaxed transition-all duration-300",
-                                            msg.role === "user"
-                                                ? "bg-pastel-purple/60 text-white rounded-tr-sm shadow-sm user-bubble"
-                                                : "bg-white/80 border border-white/50 text-foreground rounded-tl-sm backdrop-blur-sm"
+                                            "flex gap-4 group",
+                                            msg.role === "user" ? "flex-row-reverse" : "flex-row"
                                         )}
                                     >
-                                        <div className="prose prose-sm max-w-none break-words">
-                                            {msg.role === "assistant" && index === messages.length - 1 ? (
-                                                <>
+                                        <Avatar className={cn(
+                                            "h-8 w-8 mt-1 shadow-sm transition-opacity duration-300"
+                                        )}>
+                                            <AvatarFallback className={cn(
+                                                "text-xs font-bold",
+                                                msg.role === "user" ? "bg-pastel-blue text-white" : "bg-white text-pastel-purple border border-black/5"
+                                            )}>
+                                                {msg.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                                            </AvatarFallback>
+                                        </Avatar>
+
+                                        <div className={cn("flex flex-col gap-1 max-w-[85%]", msg.role === "user" ? "items-end" : "items-start")}>
+                                            <div
+                                                className={cn(
+                                                    "rounded-2xl px-6 py-3.5 text-[15px] shadow-sm leading-relaxed transition-all duration-300",
+                                                    msg.role === "user"
+                                                        ? "bg-pastel-purple/60 text-white rounded-tr-sm shadow-sm user-bubble"
+                                                        : "bg-white/80 border border-white/50 text-foreground rounded-tl-sm backdrop-blur-sm"
+                                                )}
+                                            >
+                                                <div className="prose prose-sm max-w-none break-words">
+                                                    <ReactMarkdown
+                                                        remarkPlugins={[remarkGfm]}
+                                                        components={markdownComponents}
+                                                    >
+                                                        {msg.content}
+                                                    </ReactMarkdown>
+                                                </div>
+                                            </div>
+                                            <span className="text-[10px] text-muted-foreground/50 px-1">
+                                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                                {isLoading && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        className="flex gap-4 group flex-row"
+                                    >
+                                        <Avatar className="h-8 w-8 mt-1 shadow-sm">
+                                            <AvatarFallback className="bg-white text-pastel-purple border border-black/5">
+                                                <Bot className="h-4 w-4" />
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex flex-col gap-1 max-w-[85%] items-start">
+                                            <div className="rounded-2xl px-6 py-3.5 text-[15px] shadow-sm leading-relaxed bg-white/80 border border-white/50 text-foreground rounded-tl-sm backdrop-blur-sm">
+                                                <div className="prose prose-sm max-w-none break-words">
                                                     <ReactMarkdown
                                                         remarkPlugins={[remarkGfm]}
                                                         components={markdownComponents}
                                                     >
                                                         {displayedContent}
                                                     </ReactMarkdown>
-                                                    {isTyping && (
-                                                        <motion.span
-                                                            initial={{ opacity: 0 }}
-                                                            animate={{ opacity: [0, 1, 0] }}
-                                                            transition={{ repeat: Infinity, duration: 0.8 }}
-                                                            className="inline-block w-2 h-5 ml-1 bg-pastel-purple align-middle rounded-sm shadow-[0_0_10px_rgba(183,168,214,0.5)]"
-                                                        />
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <ReactMarkdown
-                                                    remarkPlugins={[remarkGfm]}
-                                                    components={markdownComponents}
-                                                >
-                                                    {msg.content}
-                                                </ReactMarkdown>
-                                            )}
+                                                    <span className="inline-block w-1.5 h-4 ml-1 align-middle bg-pastel-purple animate-pulse" />
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    {msg.role === "assistant" && isLoading && index === messages.length - 1 && !displayedContent && (
-                                        <div className="flex items-center gap-1.5 h-6 px-2">
-                                            <motion.span
-                                                animate={{ y: [0, -5, 0] }}
-                                                transition={{ repeat: Infinity, duration: 0.6, delay: 0 }}
-                                                className="w-2 h-2 bg-pastel-purple rounded-full"
-                                            />
-                                            <motion.span
-                                                animate={{ y: [0, -5, 0] }}
-                                                transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }}
-                                                className="w-2 h-2 bg-pastel-pink rounded-full"
-                                            />
-                                            <motion.span
-                                                animate={{ y: [0, -5, 0] }}
-                                                transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }}
-                                                className="w-2 h-2 bg-pastel-blue rounded-full"
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            </motion.div>
-                        ))}
+                                    </motion.div>
+                                )}
+                            </>
+                        )}
                     </AnimatePresence>
                     <div ref={messagesEndRef} />
                 </div>
@@ -424,7 +389,7 @@ export function ChatInterface({ onManageProfiles }: ChatInterfaceProps) {
                             disabled={isLoading}
                         />
                         <Button
-                            onClick={isLoading ? stopGeneration : sendMessage}
+                            onClick={isLoading ? stopGeneration : handleSendMessage}
                             disabled={!isLoading && !input.trim()}
                             size="icon"
                             className={cn(

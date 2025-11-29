@@ -131,7 +131,7 @@ async def analyze_profile(request: AnalyzeRequest):
         核心特质:
         1. {request.traits.get('investment', '未知')} (对应 投资型/测试型)
         2. {request.traits.get('rationality', '未知')} (对应 理性/感性)
-        3. {request.traits.get('conflict', '未知')} (对应 合理解释/回避)
+        3. {request.traits.get('openness', '未知')} (对应 合理解释/回避)
         
         请严格以JSON格式输出，不要包含Markdown格式标记（如```json）,把知识库中的信息用你的语言组织，不要直接说”这是在知识库中的信息“：
         {{

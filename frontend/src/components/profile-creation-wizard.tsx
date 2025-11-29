@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { ProfileAnalysisView } from "@/components/profile-analysis-view";
+import { getApiUrl } from "@/lib/api-config";
 
 interface ProfileCreationWizardProps {
     onCancel: () => void;
@@ -26,131 +27,164 @@ const STAGES: { id: RelationshipStage; label: string; icon: any; color: string; 
 
 // Questions Configuration
 const QUESTIONS = [
-    // Group 1: Investment (Left) vs Test (Right)
+    // Group 1: Investment vs Test
     {
         id: 1,
-        text: "她是一个怎样的人",
-        weight: 0.37,
+        text: "和很多朋友在一起时",
         category: "investment",
-        left: "专注的投入某个兴趣的人（投资型）",
-        right: "兴趣广泛，什么都想尝试的人（测试型）"
+        options: [
+            { text: "通常只和一到两个朋友交流", type: "investment", weight: 0.5 },
+            { text: "通常会能够照顾到每个人的情绪雨露均沾", type: "test", weight: 0.5 }
+        ]
     },
     {
         id: 2,
-        text: "当她和某人分手时",
-        weight: 0.23,
+        text: "她是一个怎样的人",
         category: "investment",
-        left: "通常让自己的情绪深陷其中，很难抽身出来",
-        right: "虽然觉得受伤，但一旦下定决心，就会直截了当地将过去恋人的影子甩开"
+        options: [
+            { text: "专注的投入某个兴趣的人", type: "investment", weight: 0.35 },
+            { text: "兴趣广泛，什么都想尝试的人", type: "test", weight: 0.35 }
+        ]
     },
     {
         id: 3,
-        text: "关于她的社交圈",
-        weight: 0.2,
+        text: "她周末一般怎么过",
         category: "investment",
-        left: "朋友圈子比较固定，深交的朋友多",
-        right: "朋友圈子很广，认识各种各样的人"
+        options: [
+            { text: "要么自己充电，要么就和固定几个人一起。比较稳定的圈子，很少“乱约”、不太爱到处社交。", type: "investment", weight: 0.4 },
+            { text: "约朋友吃饭、唱歌、认识新朋友挺多的。安排很多、经常换不同局、总说“看心情，谁约我我就出去”", type: "test", weight: 0.4 }
+        ]
     },
     {
         id: 4,
-        text: "对待新事物的态度",
-        weight: 0.15,
+        text: "朋友圈/微博发的内容",
         category: "investment",
-        left: "比较谨慎，喜欢深入研究后再尝试",
-        right: "充满好奇，喜欢先尝试再说"
+        options: [
+            { text: "朋友圈发的少且干净。", type: "investment", weight: 0.6 },
+            { text: "经常发自拍有明显的钓鱼倾向。", type: "test", weight: 0.6 }
+        ]
     },
     {
         id: 5,
-        text: "在感情中的表现",
-        weight: 0.25,
+        text: "在社交场合，她通常是？",
         category: "investment",
-        left: "倾向于长期稳定的关系，愿意付出",
-        right: "倾向于体验和感觉，不合适就换"
+        options: [
+            { text: "很难和不认识的人进行交谈", type: "investment", weight: 0.7 },
+            { text: "很容易和多数人谈笑风生", type: "test", weight: 0.7 }
+        ]
     },
-
-    // Group 2: Rational (Left) vs Emotional (Right)
     {
         id: 6,
-        text: "做决定时",
-        weight: 0.3,
-        category: "rationality",
-        left: "更看重逻辑和事实",
-        right: "更看重感觉和直觉"
+        text: "当她决定吃什么的时候",
+        category: "investment",
+        options: [
+            { text: "先看看有没有吃过的", type: "investment", weight: 0.3 },
+            { text: "先看看有没有没吃过的新奇的", type: "test", weight: 0.3 }
+        ]
     },
+
+    // Group 2: Rational vs Emotional
     {
         id: 7,
-        text: "面对冲突时",
-        weight: 0.25,
+        text: "她对于未来想要的生活清楚嘛？",
         category: "rationality",
-        left: "试图讲道理，分析对错",
-        right: "情绪激动，表达感受"
+        options: [
+            { text: "对未来有着清晰的认知和追求，愿意制定详细的计划并且亲自去实施。", type: "rational", weight: 0.3 },
+            { text: "不太清楚，对未来虽然有要求，但是没有具体的目标和计划，会要求伴侣来达成。", type: "emotional", weight: 0.3 }
+        ]
     },
     {
         id: 8,
-        text: "安慰别人时",
-        weight: 0.2,
+        text: "认识她的人倾向形容她为：",
         category: "rationality",
-        left: "提供解决方案和建议",
-        right: "给予情感支持和共情"
+        options: [
+            { text: "逻辑和明确。", type: "rational", weight: 0.6 },
+            { text: "热情和敏感。", type: "emotional", weight: 0.6 }
+        ]
     },
     {
         id: 9,
-        text: "日常生活中",
-        weight: 0.15,
+        text: "她的MBTI",
         category: "rationality",
-        left: "做事有计划，条理清晰",
-        right: "比较随性，跟着感觉走"
+        options: [
+            { text: "有 T (Thinking) 理智", type: "rational", weight: 0.5 },
+            { text: "有 F (Feeling) 感觉", type: "emotional", weight: 0.5 }
+        ]
     },
     {
         id: 10,
-        text: "看电影或读书时",
-        weight: 0.2,
+        text: "当她谈论她不喜欢的事情或人时",
         category: "rationality",
-        left: "关注剧情逻辑和结构",
-        right: "关注人物情感和氛围"
+        options: [
+            { text: "客观评价并且带有逻辑的评价", type: "rational", weight: 0.47 },
+            { text: "谈情绪大于谈事实（我喜欢，我讨厌）", type: "emotional", weight: 0.47 }
+        ]
     },
-
-    // Group 3: Rationalization (Left) vs Avoidant (Right)
     {
         id: 11,
-        text: "遇到不开心的事情",
-        weight: 0.3,
-        category: "conflict",
-        left: "会找理由说服自己接受",
-        right: "会选择逃避，不想面对"
+        text: "遇到一个重要决定（选专业 / 换工作 / 搬家）时，她会？",
+        category: "rationality",
+        options: [
+            { text: "先列优缺点、未来发展、风险，想清楚再决定", type: "rational", weight: 0.4 },
+            { text: "先看自己的感觉：开不开心、喜不喜欢、合不合心意", type: "emotional", weight: 0.4 }
+        ]
     },
     {
         id: 12,
-        text: "面对压力时",
-        weight: 0.25,
-        category: "conflict",
-        left: "试图分析原因，寻找合理性",
-        right: "想要躲起来，暂时断联"
+        text: "聊天话题重心",
+        category: "rationality",
+        options: [
+            { text: "更容易聊学习/专业/工作、行业、目标、规划。会问你：学什么的？打算以后做什么？现在在忙什么项目？", type: "rational", weight: 0.4 },
+            { text: "聊感情、星座、韩剧、八卦、谁喜欢谁、谁分手了。很容易聊到“理想型”“恋爱故事”“最浪漫的事”", type: "emotional", weight: 0.4 }
+        ]
     },
     {
         id: 13,
-        text: "关于承诺",
-        weight: 0.2,
-        category: "conflict",
-        left: "会解释为什么做不到",
-        right: "会回避做出承诺"
+        text: "表达方式",
+        category: "rationality",
+        options: [
+            { text: "文字偏简洁，少用特别夸张的表情。说话会带一点分析：“我觉得这件事分几块…”、“从长远看……”", type: "rational", weight: 0.45 },
+            { text: "表情包多、语气词多（哈哈哈、emmm、哎呀之类）。情绪起伏明显，开心不开心都写在字里行间", type: "emotional", weight: 0.45 }
+        ]
     },
+
+    // Group 3: Openness (Rationalization vs Avoidant)
     {
         id: 14,
-        text: "被批评时",
-        weight: 0.2,
-        category: "conflict",
-        left: "会辩解，证明自己是对的",
-        right: "沉默不语，拒绝沟通"
+        text: "朋友圈照片",
+        category: "openness",
+        options: [
+            { text: "有很多性感的照片", type: "rationalization", weight: 0.6 },
+            { text: "没有什么个人照或者穿着保守", type: "avoidant", weight: 0.6 }
+        ]
     },
     {
         id: 15,
-        text: "处理过去的回忆",
-        weight: 0.15,
-        category: "conflict",
-        left: "会赋予它某种意义",
-        right: "尽量不去想，封存起来"
+        text: "对待异性",
+        category: "openness",
+        options: [
+            { text: "没有太大差别", type: "rationalization", weight: 0.5 },
+            { text: "和对待同性有明显差别", type: "avoidant", weight: 0.5 }
+        ]
     },
+    {
+        id: 16,
+        text: "她会主动开带点颜色的玩笑吗？",
+        category: "openness",
+        options: [
+            { text: "会，偶尔", type: "rationalization", weight: 0.3 },
+            { text: "从不", type: "avoidant", weight: 0.3 }
+        ]
+    },
+    {
+        id: 17,
+        text: "她能否自然的谈论她之前的感情",
+        category: "openness",
+        options: [
+            { text: "可以", type: "rationalization", weight: 0.2 },
+            { text: "不可以", type: "avoidant", weight: 0.2 }
+        ]
+    }
 ];
 
 export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationWizardProps) {
@@ -161,7 +195,7 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
 
     // Questionnaire State
     const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
-    const [answers, setAnswers] = useState<{ questionId: number; scoreDelta: number }[]>([]);
+    const [answers, setAnswers] = useState<{ questionId: number; type: string; weight: number }[]>([]);
     const [isCalculating, setIsCalculating] = useState(false);
 
     const [createdProfileId, setCreatedProfileId] = useState<string | null>(null);
@@ -173,24 +207,25 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
         traits: {
             investment: "测试" | "投资";
             rationality: "感性" | "理性";
-            conflict: "回避" | "合理解释";
+            openness: "回避" | "合理解释";
         }
     } | null>(null);
 
-    const handleAnswer = (option: 'left' | 'middle' | 'right') => {
+    const handleAnswer = (optionIndex: number) => {
         const question = QUESTIONS[currentQuestionIdx];
-        let scoreDelta = 0;
+        const selectedOption = question.options[optionIndex];
 
-        if (option === 'left') scoreDelta = question.weight;
-        else if (option === 'right') scoreDelta = -question.weight;
-        // middle is 0
-
-        setAnswers(prev => [...prev, { questionId: question.id, scoreDelta }]);
+        if (!selectedOption) {
+            // Handle "Unknown/Unsure" - Middle option
+            setAnswers(prev => [...prev, { questionId: question.id, type: "unknown", weight: 0 }]);
+        } else {
+            setAnswers(prev => [...prev, { questionId: question.id, type: selectedOption.type, weight: selectedOption.weight }]);
+        }
 
         if (currentQuestionIdx < QUESTIONS.length - 1) {
-            setTimeout(() => setCurrentQuestionIdx(prev => prev + 1), 200); // Small delay for visual feedback
+            setTimeout(() => setCurrentQuestionIdx(prev => prev + 1), 200);
         } else {
-            finishWizard([...answers, { questionId: question.id, scoreDelta }]);
+            finishWizard([...answers, { questionId: question.id, type: selectedOption ? selectedOption.type : "unknown", weight: selectedOption ? selectedOption.weight : 0 }]);
         }
     };
 
@@ -203,8 +238,6 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
                 setStep(1);
             }
         } else if (step === 3) {
-            // If going back from result, maybe just reset to step 2 start? Or warn user?
-            // For now, let's go back to step 2 start
             setStep(2);
             setCurrentQuestionIdx(0);
             setAnswers([]);
@@ -214,33 +247,34 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
         }
     };
 
-    const finishWizard = async (finalAnswers: { questionId: number; scoreDelta: number }[]) => {
+    const finishWizard = async (finalAnswers: { questionId: number; type: string; weight: number }[]) => {
         setIsCalculating(true);
 
-        // Calculate scores
+        // Calculate Weighted Scores
         const scores = {
             investment: 0,
-            rationality: 0,
-            conflict: 0
+            test: 0,
+            rational: 0,
+            emotional: 0,
+            rationalization: 0,
+            avoidant: 0
         };
 
         finalAnswers.forEach(ans => {
-            const question = QUESTIONS.find(q => q.id === ans.questionId);
-            if (question) {
-                scores[question.category as keyof typeof scores] += ans.scoreDelta;
+            if (ans.type !== "unknown" && ans.type in scores) {
+                scores[ans.type as keyof typeof scores] += ans.weight;
             }
         });
 
-        // Determine Traits
+        // Determine Traits by comparing scores
         const traits = {
-            investment: (scores.investment > 0 ? "投资" : "测试") as "投资" | "测试",
-            rationality: (scores.rationality > 0 ? "理性" : "感性") as "理性" | "感性",
-            conflict: (scores.conflict > 0 ? "合理解释" : "回避") as "合理解释" | "回避"
+            investment: (scores.investment >= scores.test ? "投资" : "测试") as "投资" | "测试",
+            rationality: (scores.rational >= scores.emotional ? "理性" : "感性") as "理性" | "感性",
+            openness: (scores.rationalization >= scores.avoidant ? "合理解释" : "回避") as "合理解释" | "回避"
         };
 
         try {
-            // Call Backend for Analysis
-            const response = await fetch('http://127.0.0.1:8000/analyze-profile', {
+            const response = await fetch(`${getApiUrl()}/analyze-profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -264,7 +298,6 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
 
             setAnalysisResult(result);
 
-            // Auto-save the profile immediately
             if (selectedStage) {
                 const newId = addProfile({
                     name: name,
@@ -280,7 +313,6 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
             setStep(3);
         } catch (error) {
             console.error("Analysis error:", error);
-            // Fallback if API fails
             const fallbackResult = {
                 archetype: "未知类型",
                 analysis: "无法连接到分析服务器，但我们已经记录了她的性格特征。",
@@ -288,7 +320,6 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
             };
             setAnalysisResult(fallbackResult);
 
-            // Auto-save fallback
             if (selectedStage) {
                 const newId = addProfile({
                     name: name,
@@ -419,9 +450,9 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
                                     </div>
                                 </div>
                             ) : (
-                                <div className="w-full max-w-3xl space-y-8">
+                                <div className="w-full max-w-4xl space-y-8">
                                     {/* Progress */}
-                                    <div className="space-y-2">
+                                    <div className="max-w-2xl mx-auto space-y-2">
                                         <div className="flex justify-between text-sm font-medium text-muted-foreground">
                                             <span>问题 {currentQuestionIdx + 1} / {QUESTIONS.length}</span>
                                             <span>{Math.round(progress)}%</span>
@@ -437,43 +468,70 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
                                     </div>
 
                                     {/* Question Card */}
-                                    <div className="text-center space-y-4 mb-8">
-                                        <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{currentQuestion.text}</h2>
+                                    <div className="text-center space-y-6 mb-8 max-w-2xl mx-auto">
+                                        <h2 className="text-2xl md:text-3xl font-bold tracking-tight leading-tight">{currentQuestion.text}</h2>
                                     </div>
 
-                                    {/* Options */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        {/* Left Option */}
+                                    {/* Options - Responsive Grid */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Option A */}
                                         <button
-                                            onClick={() => handleAnswer('left')}
-                                            className="group relative p-6 h-auto min-h-[200px] rounded-2xl bg-white border-2 border-transparent hover:border-pastel-purple/50 hover:shadow-lg transition-all duration-300 flex flex-col items-center justify-center text-center gap-4"
+                                            onClick={() => handleAnswer(0)}
+                                            className="group relative p-8 rounded-3xl bg-white/60 hover:bg-white border-2 border-transparent hover:border-pastel-purple/50 hover:shadow-xl transition-all duration-300 flex flex-col items-center text-center gap-6 h-full min-h-[240px] justify-center backdrop-blur-sm"
                                         >
-                                            <div className="h-12 w-12 rounded-full bg-pastel-purple/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                <span className="text-xl font-bold text-pastel-purple">A</span>
+                                            <div className="h-14 w-14 rounded-2xl bg-pastel-purple/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                                <span className="text-2xl font-bold text-pastel-purple">A</span>
                                             </div>
-                                            <p className="font-medium text-foreground/80 group-hover:text-foreground">{currentQuestion.left}</p>
+                                            <p className="text-lg font-medium text-foreground/90 group-hover:text-foreground leading-relaxed">
+                                                {currentQuestion.options[0].text}
+                                            </p>
+                                            <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-pastel-purple/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                         </button>
 
-                                        {/* Middle Option */}
+                                        {/* Option B */}
                                         <button
-                                            onClick={() => handleAnswer('middle')}
-                                            className="group relative p-6 h-auto min-h-[200px] rounded-2xl bg-white border-2 border-transparent hover:border-gray-400/50 hover:shadow-lg transition-all duration-300 flex flex-col items-center justify-center text-center gap-4"
+                                            onClick={() => handleAnswer(1)}
+                                            className="group relative p-8 rounded-3xl bg-white/60 hover:bg-white border-2 border-transparent hover:border-pastel-blue/50 hover:shadow-xl transition-all duration-300 flex flex-col items-center text-center gap-6 h-full min-h-[240px] justify-center backdrop-blur-sm"
                                         >
-                                            <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                <HelpCircle className="h-6 w-6 text-gray-400" />
+                                            <div className="h-14 w-14 rounded-2xl bg-pastel-blue/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                                <span className="text-2xl font-bold text-pastel-blue">B</span>
                                             </div>
-                                            <p className="font-medium text-foreground/80 group-hover:text-foreground">未知 / 不确定</p>
+                                            <p className="text-lg font-medium text-foreground/90 group-hover:text-foreground leading-relaxed">
+                                                {currentQuestion.options[1].text}
+                                            </p>
+                                            <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-pastel-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                        </button>
+                                    </div>
+
+                                    {/* Navigation Actions */}
+                                    <div className="flex items-center justify-center gap-6 pt-8">
+                                        <button
+                                            onClick={() => {
+                                                if (currentQuestionIdx > 0) {
+                                                    setCurrentQuestionIdx(prev => prev - 1);
+                                                    setAnswers(prev => prev.slice(0, -1));
+                                                }
+                                            }}
+                                            disabled={currentQuestionIdx === 0}
+                                            className={cn(
+                                                "text-base font-medium px-8 py-4 rounded-full transition-all duration-200 flex items-center gap-3",
+                                                currentQuestionIdx === 0
+                                                    ? "text-muted-foreground/50 cursor-not-allowed"
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-black/5 active:scale-95"
+                                            )}
+                                        >
+                                            <ArrowLeft className="h-5 w-5" />
+                                            <span>上一题</span>
                                         </button>
 
-                                        {/* Right Option */}
+                                        <div className="h-8 w-px bg-black/10" />
+
                                         <button
-                                            onClick={() => handleAnswer('right')}
-                                            className="group relative p-6 h-auto min-h-[200px] rounded-2xl bg-white border-2 border-transparent hover:border-pastel-blue/50 hover:shadow-lg transition-all duration-300 flex flex-col items-center justify-center text-center gap-4"
+                                            onClick={() => handleAnswer(-1)}
+                                            className="text-base font-medium text-muted-foreground hover:text-foreground transition-all duration-200 flex items-center gap-3 px-8 py-4 rounded-full hover:bg-black/5 active:scale-95"
                                         >
-                                            <div className="h-12 w-12 rounded-full bg-pastel-blue/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                <span className="text-xl font-bold text-pastel-blue">B</span>
-                                            </div>
-                                            <p className="font-medium text-foreground/80 group-hover:text-foreground">{currentQuestion.right}</p>
+                                            <HelpCircle className="h-5 w-5" />
+                                            <span>跳过 / 不确定</span>
                                         </button>
                                     </div>
                                 </div>

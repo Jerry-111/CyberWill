@@ -73,8 +73,8 @@ export function ProfileAnalysisView({ profile, onStartChat }: ProfileAnalysisVie
                     />
                     <TraitCard
                         icon={Shield}
-                        label="性开放度/边界"
-                        value={profile.traits.conflict}
+                        label="开放度"
+                        value={profile.traits.openness}
                         color="text-pastel-blue"
                         bg="bg-pastel-blue/10"
                     />
@@ -85,12 +85,12 @@ export function ProfileAnalysisView({ profile, onStartChat }: ProfileAnalysisVie
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.2 }}
-                    className="flex-1 bg-white/60 rounded-3xl border border-white/60 shadow-sm p-6 md:p-8 overflow-y-auto custom-scrollbar relative"
+                    className="flex-1 bg-white/40 rounded-3xl p-6 md:p-8 overflow-y-auto custom-scrollbar relative backdrop-blur-sm"
                 >
                     <div className="prose prose-lg max-w-none text-muted-foreground leading-relaxed text-center md:text-left">
                         <ReactMarkdown
                             components={{
-                                p: ({ node, ...props }) => <p className="mb-6 text-base md:text-lg leading-relaxed text-gray-600" {...props} />,
+                                p: ({ node, ...props }) => <p className="mb-6 text-base md:text-lg leading-relaxed text-gray-700" {...props} />,
                                 strong: ({ node, ...props }) => <span className="font-bold text-gray-900 bg-pastel-purple/10 px-1 rounded" {...props} />,
                             }}
                         >
@@ -108,7 +108,7 @@ export function ProfileAnalysisView({ profile, onStartChat }: ProfileAnalysisVie
                 >
                     <Button
                         onClick={onStartChat}
-                        className="h-14 px-12 rounded-full text-lg font-bold bg-black text-white hover:bg-black/80 shadow-xl shadow-black/10 hover:scale-105 transition-all"
+                        className="h-14 px-12 rounded-full text-lg font-bold bg-gradient-to-r from-pastel-purple to-pastel-pink text-white hover:opacity-90 shadow-xl shadow-pastel-purple/20 hover:scale-105 transition-all border-0"
                     >
                         开始对话 <ArrowRight className="ml-2 h-5 w-5" />
                     </Button>

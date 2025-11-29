@@ -1,22 +1,18 @@
 import { useState, useRef } from 'react';
+import { getApiUrl } from '@/lib/api-config';
 
-interface Message {
-    role: 'user' | 'assistant';
-    content: string;
+interface UseChatStreamProps {
+    onChunk?: (chunk: string) => void;
+    onFinish?: (fullMessage: string) => void;
 }
 
 interface UseChatStreamReturn {
-    messages: Message[];
-    input: string;
-    setInput: (input: string) => void;
     isLoading: boolean;
-    sendMessage: () => Promise<void>;
+    sendMessage: (content: string, profileContext?: string) => Promise<void>;
     stopGeneration: () => void;
 }
 
-export function useChatStream(profileContext?: string): UseChatStreamReturn {
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [input, setInput] = useState('');
+export function useChatStream({ onChunk, onFinish }: UseChatStreamProps = {}): UseChatStreamReturn {
     const [isLoading, setIsLoading] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -29,30 +25,21 @@ export function useChatStream(profileContext?: string): UseChatStreamReturn {
         }
     };
 
-    const sendMessage = async () => {
-        if (!input.trim()) return;
+    const sendMessage = async (content: string, profileContext?: string) => {
+        if (!content.trim()) return;
 
-        const userMessage: Message = { role: 'user', content: input };
-        setMessages((prev) => [...prev, userMessage]);
-        setInput('');
         setIsLoading(true);
-
-        // Create a placeholder for the assistant's message
-        setMessages((prev) => [
-            ...prev,
-            { role: 'assistant', content: '' },
-        ]);
-
         abortControllerRef.current = new AbortController();
+        let fullMessage = "";
 
         try {
-            const response = await fetch('http://127.0.0.1:8000/chat', {
+            const response = await fetch(`${getApiUrl()}/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    message: userMessage.content,
+                    message: content,
                     session_id: sessionId,
                     profile_context: profileContext
                 }),
@@ -88,34 +75,27 @@ export function useChatStream(profileContext?: string): UseChatStreamReturn {
                             setSessionId(data.session_id);
                         }
 
-                        setMessages((prev) => {
-                            const newMessages = [...prev];
-                            const lastMessageIndex = newMessages.length - 1;
-                            const lastMessage = newMessages[lastMessageIndex];
-
-                            if (lastMessage.role === 'assistant') {
-                                if (data.type === 'answer') {
-                                    // Create a new object to avoid mutation
-                                    newMessages[lastMessageIndex] = {
-                                        ...lastMessage,
-                                        content: (lastMessage.content || '') + data.content
-                                    };
-                                }
+                        if (data.type === 'answer') {
+                            const chunk = data.content;
+                            fullMessage += chunk;
+                            if (onChunk) {
+                                onChunk(chunk);
                             }
-                            return newMessages;
-                        });
+                        }
                     } catch (e) {
                         console.error('Error parsing JSON chunk:', e);
                     }
                 }
             }
+
+            if (onFinish) {
+                onFinish(fullMessage);
+            }
+
         } catch (error: any) {
             if (error.name !== 'AbortError') {
                 console.error('Error sending message:', error);
-                setMessages((prev) => [
-                    ...prev,
-                    { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' },
-                ]);
+                // Optionally handle error via callback if needed
             }
         } finally {
             setIsLoading(false);
@@ -124,9 +104,6 @@ export function useChatStream(profileContext?: string): UseChatStreamReturn {
     };
 
     return {
-        messages,
-        input,
-        setInput,
         isLoading,
         sendMessage,
         stopGeneration,
