@@ -30,7 +30,7 @@ interface ProfileContextType {
     profiles: GirlProfile[];
     currentProfile: GirlProfile | null;
     selectProfile: (profileId: string) => void;
-    addProfile: (profile: Omit<GirlProfile, "id" | "createdAt">) => void;
+    addProfile: (profile: Omit<GirlProfile, "id" | "createdAt">) => string;
     deleteProfile: (profileId: string) => void;
     clearCurrentProfile: () => void;
 }
@@ -62,13 +62,15 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     };
 
     const addProfile = (newProfileData: Omit<GirlProfile, "id" | "createdAt">) => {
+        const id = crypto.randomUUID();
         const newProfile: GirlProfile = {
             ...newProfileData,
-            id: crypto.randomUUID(),
+            id,
             createdAt: Date.now(),
         };
         setProfiles((prev) => [...prev, newProfile]);
         setCurrentProfile(newProfile); // Auto-select newly created profile
+        return id;
     };
 
     const deleteProfile = (profileId: string) => {

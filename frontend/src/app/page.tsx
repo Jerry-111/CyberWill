@@ -6,6 +6,7 @@ import { ChatInterface } from "@/components/chat-interface";
 import { ProfileProvider, useProfile } from "@/context/profile-context";
 import { ProfileSelector } from "@/components/profile-selector";
 import { ProfileCreationWizard } from "@/components/profile-creation-wizard";
+import { ProfileAnalysisView } from "@/components/profile-analysis-view";
 import { Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -29,8 +30,8 @@ function ProfileReminder({ onGoToSelector }: { onGoToSelector: () => void }) {
 }
 
 function AppContent() {
-  const { currentProfile } = useProfile();
-  const [view, setView] = useState<"selector" | "wizard" | "chat" | "analysis" | "advice">("selector");
+  const { currentProfile, selectProfile } = useProfile();
+  const [view, setView] = useState<"selector" | "wizard" | "chat" | "analysis" | "advice" | "profile-details">("selector");
 
   // Sync view with profile state
   // If no profile is selected, force selector or wizard
@@ -49,9 +50,9 @@ function AppContent() {
       <div className="w-full h-full flex gap-6 relative z-10">
 
         {/* Left Card: Sidebar */}
-        <div className="hidden md:block w-[280px] lg:w-[320px] xl:w-[360px] 2xl:w-[400px] h-full glass-panel rounded-[2rem] overflow-hidden transition-all duration-300">
+        <div className="hidden md:block w-[220px] lg:w-[240px] xl:w-[280px] 2xl:w-[320px] h-full glass-panel rounded-[2rem] overflow-hidden transition-all duration-300">
           <Sidebar
-            currentView={view}
+            currentView={view as any}
             onNavigate={handleNavigate}
           />
         </div>
@@ -62,6 +63,10 @@ function AppContent() {
             <ProfileSelector
               onCreateStart={() => setView("wizard")}
               onProfileSelected={() => setView("chat")}
+              onViewAnalysis={(id: string) => {
+                selectProfile(id);
+                setView("profile-details");
+              }}
             />
           )}
           {view === "wizard" && (
@@ -77,6 +82,15 @@ function AppContent() {
             ) : (
               <ProfileReminder onGoToSelector={() => setView("selector")} />
             )
+          )}
+
+          {view === "profile-details" && (
+            currentProfile ? (
+              <ProfileAnalysisView
+                profile={currentProfile}
+                onStartChat={() => setView("chat")}
+              />
+            ) : <ProfileReminder onGoToSelector={() => setView("selector")} />
           )}
 
           {view === "analysis" && (

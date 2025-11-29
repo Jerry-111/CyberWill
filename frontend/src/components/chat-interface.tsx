@@ -25,9 +25,13 @@ export function ChatInterface({ onManageProfiles }: ChatInterfaceProps) {
         ? `[当前聊天对象档案]
 姓名: ${currentProfile.name}
 关系阶段: ${currentProfile.stage}
-${currentProfile.personalityType ? `人格类型: ${currentProfile.personalityType}` : ''}
+人格原型: ${currentProfile.archetype || currentProfile.personalityType || "未知"}
+核心特质:
+- 投入度: ${currentProfile.traits?.investment || "未知"}
+- 决策模式: ${currentProfile.traits?.rationality || "未知"}
+- 冲突应对: ${currentProfile.traits?.conflict || "未知"}
 
-请根据这个档案信息来提供建议和分析。`
+请根据这个档案信息（特别是人格原型和核心特质）来提供建议和分析。`
         : undefined;
 
     const { messages, input, setInput, isLoading, sendMessage, stopGeneration } = useChatStream(profileContext);

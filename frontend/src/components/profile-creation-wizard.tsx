@@ -4,11 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import { useProfile, RelationshipStage } from "@/context/profile-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, ArrowRight, Send, Sparkles, Heart, User, Coffee, Wine, Gift } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Sparkles, Heart, User, Coffee, Wine, Gift, HelpCircle, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { ProfileAnalysisView } from "@/components/profile-analysis-view";
 
 interface ProfileCreationWizardProps {
     onCancel: () => void;
@@ -24,213 +24,308 @@ const STAGES: { id: RelationshipStage; label: string; icon: any; color: string; 
     { id: "Girlfriend", label: "女朋友", icon: Heart, color: "bg-red-100 text-red-600", desc: "正式交往" },
 ];
 
+// Questions Configuration
+const QUESTIONS = [
+    // Group 1: Investment (Left) vs Test (Right)
+    {
+        id: 1,
+        text: "她是一个怎样的人",
+        weight: 0.37,
+        category: "investment",
+        left: "专注的投入某个兴趣的人（投资型）",
+        right: "兴趣广泛，什么都想尝试的人（测试型）"
+    },
+    {
+        id: 2,
+        text: "当她和某人分手时",
+        weight: 0.23,
+        category: "investment",
+        left: "通常让自己的情绪深陷其中，很难抽身出来",
+        right: "虽然觉得受伤，但一旦下定决心，就会直截了当地将过去恋人的影子甩开"
+    },
+    {
+        id: 3,
+        text: "关于她的社交圈",
+        weight: 0.2,
+        category: "investment",
+        left: "朋友圈子比较固定，深交的朋友多",
+        right: "朋友圈子很广，认识各种各样的人"
+    },
+    {
+        id: 4,
+        text: "对待新事物的态度",
+        weight: 0.15,
+        category: "investment",
+        left: "比较谨慎，喜欢深入研究后再尝试",
+        right: "充满好奇，喜欢先尝试再说"
+    },
+    {
+        id: 5,
+        text: "在感情中的表现",
+        weight: 0.25,
+        category: "investment",
+        left: "倾向于长期稳定的关系，愿意付出",
+        right: "倾向于体验和感觉，不合适就换"
+    },
+
+    // Group 2: Rational (Left) vs Emotional (Right)
+    {
+        id: 6,
+        text: "做决定时",
+        weight: 0.3,
+        category: "rationality",
+        left: "更看重逻辑和事实",
+        right: "更看重感觉和直觉"
+    },
+    {
+        id: 7,
+        text: "面对冲突时",
+        weight: 0.25,
+        category: "rationality",
+        left: "试图讲道理，分析对错",
+        right: "情绪激动，表达感受"
+    },
+    {
+        id: 8,
+        text: "安慰别人时",
+        weight: 0.2,
+        category: "rationality",
+        left: "提供解决方案和建议",
+        right: "给予情感支持和共情"
+    },
+    {
+        id: 9,
+        text: "日常生活中",
+        weight: 0.15,
+        category: "rationality",
+        left: "做事有计划，条理清晰",
+        right: "比较随性，跟着感觉走"
+    },
+    {
+        id: 10,
+        text: "看电影或读书时",
+        weight: 0.2,
+        category: "rationality",
+        left: "关注剧情逻辑和结构",
+        right: "关注人物情感和氛围"
+    },
+
+    // Group 3: Rationalization (Left) vs Avoidant (Right)
+    {
+        id: 11,
+        text: "遇到不开心的事情",
+        weight: 0.3,
+        category: "conflict",
+        left: "会找理由说服自己接受",
+        right: "会选择逃避，不想面对"
+    },
+    {
+        id: 12,
+        text: "面对压力时",
+        weight: 0.25,
+        category: "conflict",
+        left: "试图分析原因，寻找合理性",
+        right: "想要躲起来，暂时断联"
+    },
+    {
+        id: 13,
+        text: "关于承诺",
+        weight: 0.2,
+        category: "conflict",
+        left: "会解释为什么做不到",
+        right: "会回避做出承诺"
+    },
+    {
+        id: 14,
+        text: "被批评时",
+        weight: 0.2,
+        category: "conflict",
+        left: "会辩解，证明自己是对的",
+        right: "沉默不语，拒绝沟通"
+    },
+    {
+        id: 15,
+        text: "处理过去的回忆",
+        weight: 0.15,
+        category: "conflict",
+        left: "会赋予它某种意义",
+        right: "尽量不去想，封存起来"
+    },
+];
+
 export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationWizardProps) {
     const { addProfile } = useProfile();
-    const [step, setStep] = useState<1 | 2>(1);
+    const [step, setStep] = useState<1 | 2 | 3>(1);
     const [selectedStage, setSelectedStage] = useState<RelationshipStage | null>(null);
     const [name, setName] = useState("");
 
-    // Chat State for Step 2
-    const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
-    const [input, setInput] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
-    const scrollAreaRef = useRef<HTMLDivElement>(null);
-    const hasInitialized = useRef(false);
+    // Questionnaire State
+    const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
+    const [answers, setAnswers] = useState<{ questionId: number; scoreDelta: number }[]>([]);
+    const [isCalculating, setIsCalculating] = useState(false);
 
-    // Auto-scroll
-    useEffect(() => {
-        if (scrollAreaRef.current) {
-            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    const [createdProfileId, setCreatedProfileId] = useState<string | null>(null);
+
+    // Analysis Result
+    const [analysisResult, setAnalysisResult] = useState<{
+        archetype: string;
+        analysis: string;
+        traits: {
+            investment: "测试" | "投资";
+            rationality: "感性" | "理性";
+            conflict: "回避" | "合理解释";
         }
-    }, [messages]);
+    } | null>(null);
 
-    const abortControllerRef = useRef<AbortController | null>(null);
-    const [sessionId, setSessionId] = useState<string | null>(null);
+    const handleAnswer = (option: 'left' | 'middle' | 'right') => {
+        const question = QUESTIONS[currentQuestionIdx];
+        let scoreDelta = 0;
 
-    const sendMessage = async (content: string, isHiddenInit: boolean = false) => {
-        if (!content.trim()) return;
+        if (option === 'left') scoreDelta = question.weight;
+        else if (option === 'right') scoreDelta = -question.weight;
+        // middle is 0
 
-        // Abort previous request if any
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
+        setAnswers(prev => [...prev, { questionId: question.id, scoreDelta }]);
+
+        if (currentQuestionIdx < QUESTIONS.length - 1) {
+            setTimeout(() => setCurrentQuestionIdx(prev => prev + 1), 200); // Small delay for visual feedback
+        } else {
+            finishWizard([...answers, { questionId: question.id, scoreDelta }]);
         }
-        abortControllerRef.current = new AbortController();
+    };
 
-        if (!isHiddenInit) {
-            setMessages(prev => [...prev, { role: "user", content }]);
-            setInput("");
+    const handleBack = () => {
+        if (step === 2) {
+            if (currentQuestionIdx > 0) {
+                setCurrentQuestionIdx(prev => prev - 1);
+                setAnswers(prev => prev.slice(0, -1));
+            } else {
+                setStep(1);
+            }
+        } else if (step === 3) {
+            // If going back from result, maybe just reset to step 2 start? Or warn user?
+            // For now, let's go back to step 2 start
+            setStep(2);
+            setCurrentQuestionIdx(0);
+            setAnswers([]);
+            setAnalysisResult(null);
+        } else {
+            onCancel();
         }
+    };
 
-        setIsLoading(true);
+    const finishWizard = async (finalAnswers: { questionId: number; scoreDelta: number }[]) => {
+        setIsCalculating(true);
+
+        // Calculate scores
+        const scores = {
+            investment: 0,
+            rationality: 0,
+            conflict: 0
+        };
+
+        finalAnswers.forEach(ans => {
+            const question = QUESTIONS.find(q => q.id === ans.questionId);
+            if (question) {
+                scores[question.category as keyof typeof scores] += ans.scoreDelta;
+            }
+        });
+
+        // Determine Traits
+        const traits = {
+            investment: (scores.investment > 0 ? "投资" : "测试") as "投资" | "测试",
+            rationality: (scores.rationality > 0 ? "理性" : "感性") as "理性" | "感性",
+            conflict: (scores.conflict > 0 ? "合理解释" : "回避") as "合理解释" | "回避"
+        };
 
         try {
-            const response = await fetch('http://127.0.0.1:8000/chat', {
+            // Call Backend for Analysis
+            const response = await fetch('http://127.0.0.1:8000/analyze-profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: content,
-                    session_id: sessionId
-                }),
-                signal: abortControllerRef.current.signal
+                    name: name,
+                    stage: selectedStage,
+                    traits: traits
+                })
             });
 
-            if (!response.ok) throw new Error("Failed to send message");
-            if (!response.body) throw new Error("No response body");
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            setMessages(prev => [...prev, { role: "assistant", content: "" }]);
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (!line.trim()) continue;
-                    try {
-                        const data = JSON.parse(line);
-
-                        if (data.session_id && !sessionId) {
-                            setSessionId(data.session_id);
-                        }
-
-                        if (data.type === 'answer') {
-                            setMessages(prev => {
-                                const newMessages = [...prev];
-                                const lastMessageIndex = newMessages.length - 1;
-                                const lastMessage = newMessages[lastMessageIndex];
-
-                                if (lastMessage && lastMessage.role === 'assistant') {
-                                    // Create a new object to avoid mutation
-                                    newMessages[lastMessageIndex] = {
-                                        ...lastMessage,
-                                        content: (lastMessage.content || '') + data.content
-                                    };
-                                }
-                                return newMessages;
-                            });
-                        }
-                    } catch (e) {
-                        console.error("Error parsing chunk", e);
-                    }
-                }
+            if (!response.ok) {
+                throw new Error("Analysis failed");
             }
-        } catch (error: any) {
-            if (error.name !== 'AbortError') {
-                console.error("Error:", error);
+
+            const data = await response.json();
+
+            const result = {
+                archetype: data.archetype,
+                analysis: data.analysis,
+                traits: traits
+            };
+
+            setAnalysisResult(result);
+
+            // Auto-save the profile immediately
+            if (selectedStage) {
+                const newId = addProfile({
+                    name: name,
+                    stage: selectedStage,
+                    description: result.analysis,
+                    traits: result.traits,
+                    archetype: result.archetype,
+                    avatarColor: STAGES.find(s => s.id === selectedStage)?.color.split(" ")[0] || "bg-gray-100"
+                });
+                setCreatedProfileId(newId);
             }
+
+            setStep(3);
+        } catch (error) {
+            console.error("Analysis error:", error);
+            // Fallback if API fails
+            const fallbackResult = {
+                archetype: "未知类型",
+                analysis: "无法连接到分析服务器，但我们已经记录了她的性格特征。",
+                traits: traits
+            };
+            setAnalysisResult(fallbackResult);
+
+            // Auto-save fallback
+            if (selectedStage) {
+                const newId = addProfile({
+                    name: name,
+                    stage: selectedStage,
+                    description: fallbackResult.analysis,
+                    traits: fallbackResult.traits,
+                    archetype: fallbackResult.archetype,
+                    avatarColor: STAGES.find(s => s.id === selectedStage)?.color.split(" ")[0] || "bg-gray-100"
+                });
+                setCreatedProfileId(newId);
+            }
+
+            setStep(3);
         } finally {
-            setIsLoading(false);
-            abortControllerRef.current = null;
+            setIsCalculating(false);
         }
     };
 
-    // Initialize Chat when entering Step 2
-    useEffect(() => {
-        if (step === 2 && !hasInitialized.current && selectedStage) {
-            hasInitialized.current = true;
-            const stageLabel = STAGES.find(s => s.id === selectedStage)?.label || selectedStage;
-            const initialPrompt = `我现在处于\"${stageLabel}\"阶段。请用中文问我3-5个开放式问题，帮助分析她的类型（通过六大人格特征来判断）。
-
-重要规则：
-1. 每次只问一个问题
-2. 不要提供明确的字母选项（A/B/C/D）
-3. 在问完至少3个对于不同特征的问题并得到我的回答之前，不要给出任何分析或结论
-4. 如果上一个问题不容易帮助判断，可以找一个对于相同特征的不同问题来问这一个
-5. 问题要像知识库中一样，具体而且帮助用户容易回答
-6. 1-2问题判断测试/投资型，1-2问题判断理性/感性型，1-2问题判断合理解释/回避型
-
-在收集完足够信息后（至少3轮对话），请给出详细分析，并必须包含以下结论：
-1. 人格特质判定（必须从每组中选一个, 包含每个维度）：
-   - 维度一：测试型 OR 投资型
-   - 维度二：感性型 OR 理性型
-   - 维度三：回避型 OR 合理解释型
-2. 综合类型命名：根据以上三个维度的组合（共8种可能组合），判定她属于以下8种特定人格原型之一：
-   - 冰美人
-   - 勾引家
-   - 花蝴蝶
-   - 灰姑娘
-   - 鉴赏家
-   - 邻家女孩
-   - 女教父
-   - 现代女人
-
-请在回答的最后，严格按照以下格式输出总结（用于系统识别）：
-[[TRAITS:维度一,维度二,维度三]]
-[[ARCHETYPE:类型名称]]
-
-现在开始第一个问题。`;
-
-            sendMessage(initialPrompt, true);
-        }
-
-        // Cleanup on unmount or when leaving step 2
-        return () => {
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-                abortControllerRef.current = null;
-            }
-        };
-    }, [step, selectedStage]);
-
-    const handleFinish = () => {
-        if (!selectedStage || !name) return;
-
-        // Get the last assistant message (should contain the analysis)
-        const lastAssistantMessage = messages.filter(m => m.role === "assistant").pop();
-        const fullAnalysis = lastAssistantMessage?.content || "暂无描述。";
-
-        // Extract personality traits and archetype
-        const traitsMatch = fullAnalysis.match(/\[\[TRAITS:(.*?)\]\]/);
-        const archetypeMatch = fullAnalysis.match(/\[\[ARCHETYPE:(.*?)\]\]/);
-
-        let traits = undefined;
-        if (traitsMatch) {
-            const traitsList = traitsMatch[1].split(/[,，、]/).map(t => t.trim());
-            traits = {
-                investment: (traitsList.find(t => t.includes("测试") || t.includes("投资"))?.includes("测试") ? "测试" : "投资") as "测试" | "投资",
-                rationality: (traitsList.find(t => t.includes("感性") || t.includes("理性"))?.includes("感性") ? "感性" : "理性") as "感性" | "理性",
-                conflict: (traitsList.find(t => t.includes("回避") || t.includes("合理"))?.includes("回避") ? "回避" : "合理解释") as "回避" | "合理解释"
-            };
-        }
-
-        const archetype = archetypeMatch ? archetypeMatch[1] : undefined;
-
-        // Clean up the description to remove the system tags
-        const cleanDescription = fullAnalysis
-            .replace(/\[\[TRAITS:.*?\]\]/, "")
-            .replace(/\[\[ARCHETYPE:.*?\]\]/, "")
-            .trim();
-
-        addProfile({
-            name: name,
-            stage: selectedStage,
-            description: cleanDescription.slice(0, 150) + (cleanDescription.length > 150 ? "..." : ""),
-            traits: traits,
-            archetype: archetype,
-            avatarColor: STAGES.find(s => s.id === selectedStage)?.color.split(" ")[0] || "bg-gray-100"
-        });
-
+    const handleCreateProfile = () => {
         onComplete();
     };
+
+    const currentQuestion = QUESTIONS[currentQuestionIdx];
+    const progress = ((currentQuestionIdx + 1) / QUESTIONS.length) * 100;
 
     return (
         <div className="h-full w-full flex flex-col bg-white/50 backdrop-blur-xl relative overflow-hidden">
             {/* Header */}
             <div className="px-8 py-6 flex items-center justify-between border-b border-black/5 bg-white/50">
-                <Button variant="ghost" onClick={step === 1 ? onCancel : () => setStep(1)} className="gap-2">
+                <Button variant="ghost" onClick={handleBack} className="gap-2" disabled={isCalculating}>
                     <ArrowLeft className="h-4 w-4" />
                     {step === 1 ? "取消" : "返回"}
                 </Button>
                 <div className="flex items-center gap-2">
-                    <span className={cn("h-2 w-2 rounded-full transition-all duration-300", step === 1 ? "bg-pastel-purple w-8" : "bg-black/10")} />
-                    <span className={cn("h-2 w-2 rounded-full transition-all duration-300", step === 2 ? "bg-pastel-purple w-8" : "bg-black/10")} />
+                    <span className={cn("h-2 w-2 rounded-full transition-all duration-300", step >= 1 ? "bg-pastel-purple w-8" : "bg-black/10")} />
+                    <span className={cn("h-2 w-2 rounded-full transition-all duration-300", step >= 2 ? "bg-pastel-purple w-8" : "bg-black/10")} />
+                    <span className={cn("h-2 w-2 rounded-full transition-all duration-300", step >= 3 ? "bg-pastel-purple w-8" : "bg-black/10")} />
                 </div>
                 <div className="w-20" /> {/* Spacer */}
             </div>
@@ -238,7 +333,7 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
             {/* Content */}
             <div className="flex-1 overflow-hidden relative">
                 <AnimatePresence mode="wait">
-                    {step === 1 ? (
+                    {step === 1 && (
                         <motion.div
                             key="step1"
                             initial={{ opacity: 0, x: -20 }}
@@ -300,97 +395,112 @@ export function ProfileCreationWizard({ onCancel, onComplete }: ProfileCreationW
                                 </div>
                             </div>
                         </motion.div>
-                    ) : (
+                    )}
+
+                    {step === 2 && (
                         <motion.div
                             key="step2"
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20 }}
-                            className="h-full flex flex-col"
+                            exit={{ opacity: 0, x: -20 }}
+                            className="h-full flex flex-col items-center justify-center p-6"
                         >
-                            <div className="flex-1 overflow-y-auto p-4" ref={scrollAreaRef}>
-                                <div className="max-w-2xl mx-auto space-y-6 py-8">
-                                    <div className="text-center mb-8">
-                                        <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-pastel-pink to-pastel-purple mx-auto flex items-center justify-center shadow-lg shadow-pastel-pink/20 mb-4">
-                                            <Sparkles className="h-8 w-8 text-white" />
+                            {isCalculating ? (
+                                <div className="text-center space-y-6">
+                                    <div className="relative">
+                                        <div className="h-24 w-24 mx-auto rounded-full border-4 border-pastel-purple/20 border-t-pastel-purple animate-spin" />
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <Sparkles className="h-8 w-8 text-pastel-purple animate-pulse" />
                                         </div>
-                                        <h2 className="text-2xl font-bold">AI 分析</h2>
-                                        <p className="text-muted-foreground">回答几个问题，帮我们更好地了解她。</p>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <h3 className="text-2xl font-bold">正在深入分析...</h3>
+                                        <p className="text-muted-foreground">AI 正在根据你的回答构建 {name} 的人格模型</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="w-full max-w-3xl space-y-8">
+                                    {/* Progress */}
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between text-sm font-medium text-muted-foreground">
+                                            <span>问题 {currentQuestionIdx + 1} / {QUESTIONS.length}</span>
+                                            <span>{Math.round(progress)}%</span>
+                                        </div>
+                                        <div className="h-2 w-full bg-black/5 rounded-full overflow-hidden">
+                                            <motion.div
+                                                className="h-full bg-pastel-purple"
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${progress}%` }}
+                                                transition={{ duration: 0.5 }}
+                                            />
+                                        </div>
                                     </div>
 
-                                    <AnimatePresence initial={false}>
-                                        {messages.map((msg, idx) => (
-                                            <motion.div
-                                                key={idx}
-                                                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                transition={{ duration: 0.4, ease: "easeOut" }}
-                                                className={cn("flex gap-4", msg.role === "user" ? "flex-row-reverse" : "flex-row")}
-                                            >
-                                                <div className={cn(
-                                                    "max-w-[80%] rounded-2xl px-6 py-4 text-sm leading-relaxed shadow-sm",
-                                                    msg.role === "user"
-                                                        ? "bg-pastel-purple/80 text-white rounded-tr-sm"
-                                                        : "bg-white border border-black/5 text-foreground rounded-tl-sm"
-                                                )}>
-                                                    <div className="prose prose-sm max-w-none break-words dark:prose-invert">
-                                                        <ReactMarkdown
-                                                            remarkPlugins={[remarkGfm]}
-                                                            components={{
-                                                                p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                                                                a: ({ node, ...props }) => <a className="text-pastel-purple hover:underline" {...props} />,
-                                                                ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2" {...props} />,
-                                                                ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2" {...props} />,
-                                                                li: ({ node, ...props }) => <li className="mb-1" {...props} />,
-                                                                strong: ({ node, ...props }) => <strong className="font-semibold" {...props} />,
-                                                            }}
-                                                        >
-                                                            {msg.content}
-                                                        </ReactMarkdown>
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                    </AnimatePresence>
-                                    {isLoading && (
-                                        <div className="flex items-center gap-2 text-muted-foreground text-sm ml-4">
-                                            <Sparkles className="h-4 w-4 animate-spin" />
-                                            思考中...
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                                    {/* Question Card */}
+                                    <div className="text-center space-y-4 mb-8">
+                                        <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{currentQuestion.text}</h2>
+                                    </div>
 
-                            <div className="p-6 bg-white/80 backdrop-blur-md border-t border-black/5 z-10">
-                                <div className="max-w-2xl mx-auto flex gap-3">
-                                    <Input
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage(input)}
-                                        placeholder="输入你的回答..."
-                                        className="flex-1 h-12 bg-white"
-                                        disabled={isLoading}
-                                    />
-                                    <Button
-                                        onClick={() => sendMessage(input)}
-                                        disabled={!input.trim() || isLoading}
-                                        size="icon"
-                                        className="h-12 w-12 rounded-xl bg-pastel-purple hover:bg-pastel-purple/90 text-white"
-                                    >
-                                        <Send className="h-5 w-5" />
-                                    </Button>
+                                    {/* Options */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* Left Option */}
+                                        <button
+                                            onClick={() => handleAnswer('left')}
+                                            className="group relative p-6 h-auto min-h-[200px] rounded-2xl bg-white border-2 border-transparent hover:border-pastel-purple/50 hover:shadow-lg transition-all duration-300 flex flex-col items-center justify-center text-center gap-4"
+                                        >
+                                            <div className="h-12 w-12 rounded-full bg-pastel-purple/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                <span className="text-xl font-bold text-pastel-purple">A</span>
+                                            </div>
+                                            <p className="font-medium text-foreground/80 group-hover:text-foreground">{currentQuestion.left}</p>
+                                        </button>
+
+                                        {/* Middle Option */}
+                                        <button
+                                            onClick={() => handleAnswer('middle')}
+                                            className="group relative p-6 h-auto min-h-[200px] rounded-2xl bg-white border-2 border-transparent hover:border-gray-400/50 hover:shadow-lg transition-all duration-300 flex flex-col items-center justify-center text-center gap-4"
+                                        >
+                                            <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                <HelpCircle className="h-6 w-6 text-gray-400" />
+                                            </div>
+                                            <p className="font-medium text-foreground/80 group-hover:text-foreground">未知 / 不确定</p>
+                                        </button>
+
+                                        {/* Right Option */}
+                                        <button
+                                            onClick={() => handleAnswer('right')}
+                                            className="group relative p-6 h-auto min-h-[200px] rounded-2xl bg-white border-2 border-transparent hover:border-pastel-blue/50 hover:shadow-lg transition-all duration-300 flex flex-col items-center justify-center text-center gap-4"
+                                        >
+                                            <div className="h-12 w-12 rounded-full bg-pastel-blue/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                <span className="text-xl font-bold text-pastel-blue">B</span>
+                                            </div>
+                                            <p className="font-medium text-foreground/80 group-hover:text-foreground">{currentQuestion.right}</p>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="max-w-2xl mx-auto mt-4 flex justify-between items-center">
-                                    <p className="text-xs text-muted-foreground">建议至少回答3个问题以获得更好的结果。</p>
-                                    <Button
-                                        onClick={handleFinish}
-                                        variant="outline"
-                                        className="border-pastel-purple text-pastel-purple hover:bg-pastel-purple/10"
-                                    >
-                                        完成并创建档案
-                                    </Button>
-                                </div>
-                            </div>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {step === 3 && analysisResult && (
+                        <motion.div
+                            key="step3"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="h-full w-full"
+                        >
+                            <ProfileAnalysisView
+                                profile={{
+                                    id: createdProfileId || "temp",
+                                    name: name,
+                                    stage: selectedStage || "Stranger",
+                                    traits: analysisResult.traits,
+                                    archetype: analysisResult.archetype,
+                                    description: analysisResult.analysis,
+                                    avatarColor: STAGES.find(s => s.id === selectedStage)?.color.split(" ")[0] || "bg-gray-100",
+                                    createdAt: Date.now()
+                                }}
+                                onStartChat={handleCreateProfile}
+                            />
                         </motion.div>
                     )}
                 </AnimatePresence>
